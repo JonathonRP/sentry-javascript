@@ -47,7 +47,7 @@ export async function waitForInitialPageload(
 
   // let's add a buffer because it seems like the hydrated flag isn't enough :(
   // guess: The layout finishes hydration/mounting before the components within finish
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(10_000);
 
   debug && console.log('hydrated');
 }
