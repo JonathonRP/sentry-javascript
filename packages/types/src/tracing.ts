@@ -40,5 +40,5 @@ export interface PropagationContext {
    *
    * The current SDK should not modify this value!
    */
-  dsc?: DynamicSamplingContext;
+  dsc?: Partial<DynamicSamplingContext>;
 }

@@ -1,4 +1,4 @@
-import type { DynamicSamplingContext, PropagationContext, TraceparentData } from '@sentry/types';
+import type { PropagationContext, TraceparentData } from '@sentry/types';
 
 import { baggageHeaderToDynamicSamplingContext } from './baggage';
 import { uuid4 } from './misc';
@@ -59,18 +59,21 @@ export function tracingContextFromHeaders(
 
   const { traceId, parentSpanId, parentSampled } = traceparentData || {};
 
-  const propagationContext: PropagationContext = {
-    traceId: traceId || uuid4(),
-    spanId: uuid4().substring(16),
-    sampled: parentSampled,
-  };
+  let propagationContext: PropagationContext;
 
-  if (parentSpanId) {
-    propagationContext.parentSpanId = parentSpanId;
-  }
-
-  if (dynamicSamplingContext) {
-    propagationContext.dsc = dynamicSamplingContext as DynamicSamplingContext;
+  if (!traceparentData) {
+    propagationContext = {
+      traceId: traceId || uuid4(),
+      spanId: uuid4().substring(16),
+    };
+  } else {
+    propagationContext = {
+      traceId: traceId || uuid4(),
+      parentSpanId: parentSpanId || uuid4().substring(16),
+      spanId: uuid4().substring(16),
+      sampled: parentSampled,
+      dsc: dynamicSamplingContext || {}, // If we have traceparent data but no DSC it means we are not head of trace and we must freeze it
+    };
   }
 
   return {

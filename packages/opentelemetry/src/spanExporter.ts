@@ -158,9 +158,7 @@ function createTransactionForOtelSpan(span: ReadableSpan): OpenTelemetryTransact
   const parentSpanId = span.parentSpanId;
 
   const parentSampled = span.attributes[InternalSentrySemanticAttributes.PARENT_SAMPLED] as boolean | undefined;
-  const dynamicSamplingContext: DynamicSamplingContext | undefined = scope
-    ? scope.getPropagationContext().dsc
-    : undefined;
+  const dynamicSamplingContext = scope ? scope.getPropagationContext().dsc : undefined;
 
   const { op, description, tags, data, origin, source } = getSpanData(span);
   const metadata = getSpanMetadata(span);
