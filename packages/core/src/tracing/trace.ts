@@ -15,6 +15,7 @@ import { dropUndefinedKeys, logger, tracingContextFromHeaders } from '@sentry/ut
 import { DEBUG_BUILD } from '../debug-build';
 import { getCurrentScope, withScope } from '../exports';
 import type { Hub } from '../hub';
+import { getIsolationScope } from '../hub';
 import { getCurrentHub } from '../hub';
 import { handleCallbackErrors } from '../utils/handleCallbackErrors';
 import { hasTracingEnabled } from '../utils/hasTracingEnabled';
@@ -317,6 +318,13 @@ export function getActiveSpan(): Span | undefined {
   return getCurrentScope().getSpan();
 }
 
+/**
+ * Continue a trace from `sentry-trace` and `baggage` values for the current execution context.
+ * `sentry-trace` and `baggage` can be obtained from incoming request headers,
+ * or in the browser from `<meta name="sentry-trace">` and `<meta name="baggage">` HTML tags.
+ *
+ * Deprecation notice: In the next major version of the SDK the continue Trace function will not return any values.
+ */
 export function continueTrace({
   sentryTrace,
   baggage,
@@ -324,6 +332,16 @@ export function continueTrace({
   sentryTrace: Parameters<typeof tracingContextFromHeaders>[0];
   baggage: Parameters<typeof tracingContextFromHeaders>[1];
 }): Partial<TransactionContext>;
+
+/**
+ * Continue a trace from `sentry-trace` and `baggage` values for the current execution context.
+ * `sentry-trace` and `baggage` can be obtained from incoming request headers,
+ * or in the browser from `<meta name="sentry-trace">` and `<meta name="baggage">` HTML tags.
+ *
+ * The callback receives a transactionContext that may be used for `startTransaction` or `startSpan`.
+ *
+ * @deprecated The version of `continueTrace` taking a callback is deprecated and will be removed.
+ */
 export function continueTrace<V>(
   {
     sentryTrace,
@@ -334,12 +352,11 @@ export function continueTrace<V>(
   },
   callback: (transactionContext: Partial<TransactionContext>) => V,
 ): V;
+
 /**
- * Continue a trace from `sentry-trace` and `baggage` values.
- * These values can be obtained from incoming request headers,
+ * Continue a trace from `sentry-trace` and `baggage` values for the current execution context.
+ * `sentry-trace` and `baggage` can be obtained from incoming request headers,
  * or in the browser from `<meta name="sentry-trace">` and `<meta name="baggage">` HTML tags.
- *
- * The callback receives a transactionContext that may be used for `startTransaction` or `startSpan`.
  */
 export function continueTrace<V>(
   {
