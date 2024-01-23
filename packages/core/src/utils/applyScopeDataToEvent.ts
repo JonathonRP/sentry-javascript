@@ -16,13 +16,16 @@ export function applyScopeDataToEvent(event: Event, data: ScopeData): void {
   // We want to set the trace context for normal events only if there isn't already
   // a trace context on the event. There is a product feature in place where we link
   // errors with transaction and it relies on that.
+  // If there is a span, we use that to apply the trace data, if not, we use the propagation context as a fallback.
   if (span) {
     applySpanToEvent(event, span);
+  } else {
+    applyPropagationContextToEvent(event, propagationContext);
   }
 
   applyFingerprintToEvent(event, fingerprint);
   applyBreadcrumbsToEvent(event, breadcrumbs);
-  applySdkMetadataToEvent(event, sdkProcessingMetadata, propagationContext);
+  applySdkMetadataToEvent(event, sdkProcessingMetadata);
 }
 
 /** Merge data of two scopes together. */
@@ -163,15 +166,10 @@ function applyBreadcrumbsToEvent(event: Event, breadcrumbs: Breadcrumb[]): void 
   event.breadcrumbs = mergedBreadcrumbs.length ? mergedBreadcrumbs : undefined;
 }
 
-function applySdkMetadataToEvent(
-  event: Event,
-  sdkProcessingMetadata: ScopeData['sdkProcessingMetadata'],
-  propagationContext: PropagationContext,
-): void {
+function applySdkMetadataToEvent(event: Event, sdkProcessingMetadata: ScopeData['sdkProcessingMetadata']): void {
   event.sdkProcessingMetadata = {
     ...event.sdkProcessingMetadata,
     ...sdkProcessingMetadata,
-    propagationContext: propagationContext,
   };
 }
 
@@ -188,6 +186,16 @@ function applySpanToEvent(event: Event, span: Span): void {
       event.tags = { transaction: transactionName, ...event.tags };
     }
   }
+}
+
+function applyPropagationContextToEvent(event: Event, propagationContext: PropagationContext): void {
+  event.contexts = {
+    trace: {
+      trace_id: propagationContext.traceId,
+      span_id: propagationContext.spanId,
+    },
+    ...event.contexts,
+  };
 }
 
 /**

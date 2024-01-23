@@ -4,6 +4,7 @@ import {
   getCurrentScope,
   getDynamicSamplingContextFromClient,
   getDynamicSamplingContextFromSpan,
+  getIsolationScope,
   getRootSpan,
   hasTracingEnabled,
   spanToTraceHeader,
@@ -137,16 +138,21 @@ export function addTracingHeadersToFetchRequest(
 
   const transaction = span && getRootSpan(span);
 
-  const { traceId, sampled, dsc } = scope.getPropagationContext();
+  const isolationScope = getIsolationScope();
 
-  const sentryTraceHeader = span ? spanToTraceHeader(span) : generateSentryTraceHeader(traceId, undefined, sampled);
-  const dynamicSamplingContext = transaction
-    ? getDynamicSamplingContextFromSpan(transaction)
-    : dsc
-      ? dsc
-      : getDynamicSamplingContextFromClient(traceId, client, scope);
+  const { traceId, spanId, sampled, dsc } = {
+    ...isolationScope.getPropagationContext(),
+    ...scope.getPropagationContext(),
+  };
 
-  const sentryBaggageHeader = dynamicSamplingContextToSentryBaggageHeader(dynamicSamplingContext);
+  const sentryTraceHeader = span ? spanToTraceHeader(span) : generateSentryTraceHeader(traceId, spanId, sampled);
+
+  const sentryBaggageHeader = dynamicSamplingContextToSentryBaggageHeader(
+    dsc ||
+      (transaction
+        ? getDynamicSamplingContextFromSpan(transaction)
+        : getDynamicSamplingContextFromClient(traceId, client, scope)),
+  );
 
   const headers =
     options.headers ||

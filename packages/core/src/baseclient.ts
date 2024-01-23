@@ -638,21 +638,13 @@ export abstract class BaseClient<O extends ClientOptions> implements Client<O> {
         return evt;
       }
 
-      // If a trace context is not set on the event, we use the propagationContext set on the event to
-      // generate a trace context. If the propagationContext does not have a dynamic sampling context, we
-      // also generate one for it.
-      const { propagationContext } = evt.sdkProcessingMetadata || {};
-      const trace = evt.contexts && evt.contexts.trace;
-      if (!trace && propagationContext) {
-        const { traceId: trace_id, spanId, parentSpanId, dsc } = propagationContext as PropagationContext;
-        evt.contexts = {
-          trace: {
-            trace_id,
-            span_id: spanId,
-            parent_span_id: parentSpanId,
-          },
-          ...evt.contexts,
-        };
+      const propagationContext = {
+        ...isolationScope.getPropagationContext(),
+        ...(scope ? scope.getPropagationContext() : undefined),
+      };
+
+      if (propagationContext && (!evt.sdkProcessingMetadata || !evt.sdkProcessingMetadata.dynamicSamplingContext)) {
+        const { traceId: trace_id, dsc } = propagationContext;
 
         const dynamicSamplingContext = dsc ? dsc : getDynamicSamplingContextFromClient(trace_id, this, scope);
 

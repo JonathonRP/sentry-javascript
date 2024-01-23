@@ -5,6 +5,8 @@ import {
   getCurrentScope,
   getDynamicSamplingContextFromClient,
   getDynamicSamplingContextFromSpan,
+  getIsolationScope,
+  getRootSpan,
   isSentryRequestUrl,
   spanToTraceHeader,
 } from '@sentry/core';
@@ -157,6 +159,7 @@ export class Undici implements Integration {
 
     const clientOptions = client.getOptions();
     const scope = getCurrentScope();
+    const isolationScope = getIsolationScope();
     const parentSpan = getActiveSpan();
 
     const span = this._shouldCreateSpan(stringUrl) ? createRequestSpan(parentSpan, request, stringUrl) : undefined;
@@ -180,18 +183,23 @@ export class Undici implements Integration {
     };
 
     if (shouldAttachTraceData(stringUrl)) {
-      if (span) {
-        const dynamicSamplingContext = getDynamicSamplingContextFromSpan(span);
-        const sentryBaggageHeader = dynamicSamplingContextToSentryBaggageHeader(dynamicSamplingContext);
+      const transaction = span && getRootSpan(span);
 
-        setHeadersOnRequest(request, spanToTraceHeader(span), sentryBaggageHeader);
-      } else {
-        const { traceId, sampled, dsc } = scope.getPropagationContext();
-        const sentryTrace = generateSentryTraceHeader(traceId, undefined, sampled);
-        const dynamicSamplingContext = dsc || getDynamicSamplingContextFromClient(traceId, client, scope);
-        const sentryBaggageHeader = dynamicSamplingContextToSentryBaggageHeader(dynamicSamplingContext);
-        setHeadersOnRequest(request, sentryTrace, sentryBaggageHeader);
-      }
+      const { traceId, spanId, sampled, dsc } = {
+        ...isolationScope.getPropagationContext(),
+        ...scope.getPropagationContext(),
+      };
+
+      const sentryTraceHeader = span ? spanToTraceHeader(span) : generateSentryTraceHeader(traceId, spanId, sampled);
+
+      const sentryBaggageHeader = dynamicSamplingContextToSentryBaggageHeader(
+        dsc ||
+          (transaction
+            ? getDynamicSamplingContextFromSpan(transaction)
+            : getDynamicSamplingContextFromClient(traceId, client, scope)),
+      );
+
+      setHeadersOnRequest(request, sentryTraceHeader, sentryBaggageHeader);
     }
   };
 
