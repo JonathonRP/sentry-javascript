@@ -1,4 +1,3 @@
-import { tracingContextFromHeaders } from '@sentry/utils';
 import {
   Hub,
   SEMANTIC_ATTRIBUTE_SENTRY_OP,
