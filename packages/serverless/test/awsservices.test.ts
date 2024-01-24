@@ -1,4 +1,4 @@
-import * as SentryNode from '@sentry/node';
+import { NodeClient, createTransport, setCurrentClient } from '@sentry/node';
 import * as AWS from 'aws-sdk';
 import * as nock from 'nock';
 
@@ -18,22 +18,22 @@ jest.mock('@sentry/node', () => {
 });
 
 describe('awsServicesIntegration', () => {
-  const mockClient = new SentryNode.NodeClient({
+  const mockClient = new NodeClient({
     tracesSampleRate: 1.0,
     integrations: [],
     dsn: 'https://withAWSServices@domain/123',
-    transport: () => SentryNode.createTransport({ recordDroppedEvent: () => undefined }, _ => Promise.resolve({})),
+    transport: () => createTransport({ recordDroppedEvent: () => undefined }, _ => Promise.resolve({})),
     stackParser: () => [],
   });
 
   const integration = awsServicesIntegration();
   mockClient.addIntegration(integration);
 
-  const mockClientWithoutIntegration = new SentryNode.NodeClient({
+  const mockClientWithoutIntegration = new NodeClient({
     tracesSampleRate: 1.0,
     integrations: [],
     dsn: 'https://withoutAWSServices@domain/123',
-    transport: () => SentryNode.createTransport({ recordDroppedEvent: () => undefined }, _ => Promise.resolve({})),
+    transport: () => createTransport({ recordDroppedEvent: () => undefined }, _ => Promise.resolve({})),
     stackParser: () => [],
   });
 
@@ -42,7 +42,7 @@ describe('awsServicesIntegration', () => {
   });
 
   beforeEach(() => {
-    SentryNode.setCurrentClient(mockClient);
+    setCurrentClient(mockClient);
     mockSpanEnd.mockClear();
     mockStartInactiveSpan.mockClear();
   });
@@ -64,7 +64,7 @@ describe('awsServicesIntegration', () => {
     });
 
     test('getObject with integration-less client', async () => {
-      SentryNode.setCurrentClient(mockClientWithoutIntegration);
+      setCurrentClient(mockClientWithoutIntegration);
       nock('https://foo.s3.amazonaws.com').get('/bar').reply(200, 'contents');
       await s3.getObject({ Bucket: 'foo', Key: 'bar' }).promise();
       expect(mockStartInactiveSpan).not.toBeCalled();
@@ -86,7 +86,7 @@ describe('awsServicesIntegration', () => {
     });
 
     test('getObject with callback with integration-less client', done => {
-      SentryNode.setCurrentClient(mockClientWithoutIntegration);
+      setCurrentClient(mockClientWithoutIntegration);
       expect.assertions(1);
       nock('https://foo.s3.amazonaws.com').get('/bar').reply(200, 'contents');
       s3.getObject({ Bucket: 'foo', Key: 'bar' }, () => {
@@ -112,7 +112,7 @@ describe('awsServicesIntegration', () => {
     });
 
     test('invoke with integration-less client', async () => {
-      SentryNode.setCurrentClient(mockClientWithoutIntegration);
+      setCurrentClient(mockClientWithoutIntegration);
       nock('https://lambda.eu-north-1.amazonaws.com').post('/2015-03-31/functions/foo/invocations').reply(201, 'reply');
       await lambda.invoke({ FunctionName: 'foo' }).promise();
       expect(mockStartInactiveSpan).not.toBeCalled();

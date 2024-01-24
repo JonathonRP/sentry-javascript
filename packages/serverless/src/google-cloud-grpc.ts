@@ -1,6 +1,7 @@
 import type { EventEmitter } from 'events';
+import { convertIntegrationFnToClass, defineIntegration, getClient } from '@sentry/core';
 import { startInactiveSpan } from '@sentry/node';
-import type { Integration } from '@sentry/types';
+import type { Client, Integration, IntegrationClass, IntegrationFn } from '@sentry/types';
 import { fill } from '@sentry/utils';
 
 interface GrpcFunction extends CallableFunction {
@@ -25,45 +26,49 @@ interface Stub {
   [key: string]: GrpcFunctionObject;
 }
 
-/** Google Cloud Platform service requests tracking for GRPC APIs */
-export class GoogleCloudGrpc implements Integration {
-  /**
-   * @inheritDoc
-   */
-  public static id: string = 'GoogleCloudGrpc';
+const SERVICE_PATH_REGEX = /^(\w+)\.googleapis.com$/;
 
-  /**
-   * @inheritDoc
-   */
-  public name: string;
+const INTEGRATION_NAME = 'GoogleCloudGrpc';
 
-  private readonly _optional: boolean;
+const SETUP_CLIENTS = new WeakMap<Client, boolean>();
 
-  public constructor(options: { optional?: boolean } = {}) {
-    this.name = GoogleCloudGrpc.id;
-
-    this._optional = options.optional || false;
-  }
-
-  /**
-   * @inheritDoc
-   */
-  public setupOnce(): void {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const gaxModule = require('google-gax');
-      fill(
-        gaxModule.GrpcClient.prototype, // eslint-disable-line @typescript-eslint/no-unsafe-member-access
-        'createStub',
-        wrapCreateStub,
-      );
-    } catch (e) {
-      if (!this._optional) {
-        throw e;
+const _googleCloudGrpcIntegration = ((options: { optional?: boolean } = {}) => {
+  const optional = options.optional || false;
+  return {
+    name: INTEGRATION_NAME,
+    setupOnce() {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const gaxModule = require('google-gax');
+        fill(
+          gaxModule.GrpcClient.prototype, // eslint-disable-line @typescript-eslint/no-unsafe-member-access
+          'createStub',
+          wrapCreateStub,
+        );
+      } catch (e) {
+        if (!optional) {
+          throw e;
+        }
       }
-    }
-  }
-}
+    },
+    setup(client) {
+      SETUP_CLIENTS.set(client, true);
+    },
+  };
+}) satisfies IntegrationFn;
+
+export const googleCloudGrpcIntegration = defineIntegration(_googleCloudGrpcIntegration);
+
+/**
+ * Google Cloud Platform service requests tracking for GRPC APIs.
+ *
+ * @deprecated Use `googleCloudGrpcIntegration()` instead.
+ */
+// eslint-disable-next-line deprecation/deprecation
+export const GoogleCloudGrpc = convertIntegrationFnToClass(
+  INTEGRATION_NAME,
+  googleCloudGrpcIntegration,
+) as IntegrationClass<Integration>;
 
 /** Returns a wrapped function that returns a stub with tracing enabled */
 function wrapCreateStub(origCreate: CreateStubFunc): CreateStubFunc {
@@ -107,16 +112,19 @@ function fillGrpcFunction(stub: Stub, serviceIdentifier: string, methodName: str
         if (typeof ret?.on !== 'function') {
           return ret;
         }
-        const span = startInactiveSpan({
-          name: `${callType} ${methodName}`,
-          op: `grpc.${serviceIdentifier}`,
-          origin: 'auto.grpc.serverless',
-        });
-        ret.on('status', () => {
-          if (span) {
-            span.end();
-          }
-        });
+        // only instrument if integration is active on client
+        if (SETUP_CLIENTS.has(getClient() as Client)) {
+          const span = startInactiveSpan({
+            name: `${callType} ${methodName}`,
+            op: `grpc.${serviceIdentifier}`,
+            origin: 'auto.grpc.serverless',
+          });
+          ret.on('status', () => {
+            if (span) {
+              span.end();
+            }
+          });
+        }
         return ret;
       },
   );
@@ -124,6 +132,6 @@ function fillGrpcFunction(stub: Stub, serviceIdentifier: string, methodName: str
 
 /** Identifies service by its address */
 function identifyService(servicePath: string): string {
-  const match = servicePath.match(/^(\w+)\.googleapis.com$/);
+  const match = servicePath.match(SERVICE_PATH_REGEX);
   return match ? match[1] : servicePath;
 }
