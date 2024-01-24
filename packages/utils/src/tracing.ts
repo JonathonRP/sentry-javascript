@@ -78,7 +78,7 @@ export function tracingContextFromHeaders(
 
   return {
     traceparentData,
-    dynamicSamplingContext,
+    dynamicSamplingContext: dynamicSamplingContext || {}, // If we have traceparent data but no DSC it means we are not head of trace and we must freeze it,
     propagationContext,
   };
 }

@@ -1,3 +1,4 @@
+import { tracingContextFromHeaders } from '@sentry/utils';
 import {
   Hub,
   SEMANTIC_ATTRIBUTE_SENTRY_OP,
@@ -455,6 +456,7 @@ describe('continueTrace', () => {
     const scope = getCurrentScope();
 
     expect(scope.getPropagationContext()).toEqual({
+      dsc: {}, // DSC should be an empty object (frozen), because there was an incoming trace
       sampled: false,
       parentSpanId: '1121201211212012',
       spanId: expect.any(String),
