@@ -20,7 +20,6 @@ import type {
   MetricsAggregator,
   Outcome,
   ParameterizedString,
-  PropagationContext,
   SdkMetadata,
   Session,
   SessionAggregates,
